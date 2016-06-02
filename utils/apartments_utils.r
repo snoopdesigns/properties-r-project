@@ -357,12 +357,15 @@ APUTILS_download_apartments <- function(
       df_apartments_tmp <- APUTILS_fetch_apartments_page(log,progress,complex_ids[complex_id_i,], apartments_page_i, params)
       if (nrow(df_apartments_tmp) > 0) {
         df_apartments <- rbind(df_apartments_tmp, df_apartments)
+        if (nrow(df_apartments_tmp) != 25) {
+          break
+        }
       } else {
         break
       }
     }
   }
-  return(df_apartments)
+  return(unique(df_apartments))
 }
 
 log_msg <- function(msg) {

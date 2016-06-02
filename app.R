@@ -166,7 +166,7 @@ render_data <- function(output, input, rv) {
         subset(dataframe_complexes, select = complexes_select), 
         colnames = complexes_select_columns, 
         escape = FALSE,
-        options = list(pageLength = 100)
+        options = list(paging = FALSE)
       )
     } else {
       datatable(data.frame(matrix(ncol = 0, nrow = 0)))
@@ -186,7 +186,7 @@ render_data <- function(output, input, rv) {
         subset(dataframe_apartments, select = apartments_select), 
         colnames = apartments_select_columns,  
         escape = FALSE,
-        options = list(pageLength = 100)
+        options = list(paging = FALSE)
       )
     } else {
       datatable(data.frame(matrix(ncol = 0, nrow = 0)))
