@@ -3,8 +3,14 @@ library(shinydashboard)
 library(googleVis)
 library(DT)
 
-source("utils/apartments_utils.r")
-source("utils/common_utils.r")
+# TODO LIST
+# Add more accurate complex location: load not only the first apartment address, but from entire first page
+# and select the longest address (assume it is more accurate)
+
+source("utils/encoding.r")
+
+source_utf8("utils/apartments_utils.r")
+source_utf8("utils/common_utils.r")
 
 setwd(".")
 
@@ -166,8 +172,10 @@ render_data <- function(output, input, rv) {
     rv$apartments
     dataframe_complexes <- load_dataframe("data/complexes.csv")
     dataframe_apartments <- load_dataframe("data/apartments.csv")
-    dataframe_apartments <- merge(dataframe_complexes, dataframe_apartments, by.x = "complex_id", by.y = "complex_id")
-    dataframe_apartments <- transform(dataframe_apartments, apartment_link = sprintf('<a href="%s">*</a>', apartment_link))
+    if(nrow(dataframe_apartments)>0 & nrow(dataframe_complexes)>0) {
+      dataframe_apartments <- merge(dataframe_complexes, dataframe_apartments, by.x = "complex_id", by.y = "complex_id")
+      dataframe_apartments <- transform(dataframe_apartments, apartment_link = sprintf('<a href="%s">*</a>', apartment_link))
+    }
     if (ncol(dataframe_apartments) > 0) {
       datatable(
         subset(dataframe_apartments, select = apartments_select), 
@@ -223,7 +231,7 @@ server <- function(input, output,session) {
     progress <- shiny::Progress$new(session, min=0, max=1)
     progress$set(message = 'COMPLEXES', detail = 'downloading complexes...')
     dataframe_complexes <- APUTILS_download_complexes(log_msg, progress, input$complexes_max_pages, input$complexes_accurate_location, input$complexes_use_geocode, params)
-    write.csv(dataframe_complexes, "data/complexes.csv")      
+    write_dataframe(dataframe_complexes, "data/complexes.csv")      
     progress$close()
     isolate(rv$complexes <- rv$complexes + 1)
     
@@ -232,7 +240,7 @@ server <- function(input, output,session) {
     progress <- shiny::Progress$new(session, min=0, max=1)
     progress$set(message = 'APARTMENTS', detail = 'downloading apartments...')
     dataframe_apartments <- APUTILS_download_apartments(log_msg, progress, dataframe_complexes["complex_id"], input$apartment_max_pages, params)
-    write.csv(dataframe_apartments, "data/apartments.csv")  
+    write_dataframe(dataframe_apartments, "data/apartments.csv")  
     progress$close()
     isolate(rv$apartments <- rv$apartments + 1)
   })

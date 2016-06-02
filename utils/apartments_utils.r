@@ -3,12 +3,14 @@ library(plyr)
 library(ggmap)
 library(geosphere)
 
-source("utils/http_utils.r")
-source("utils/common_utils.r")
+source("utils/encoding.r")
+
+source_utf8("utils/http_utils.r")
+source_utf8("utils/common_utils.r")
 
 # Calculating distance to closest metro
 APUTILS_calculate_dist_to_metro <- function(coords) {
-  df_metro <- read.csv("data/metro.csv")
+  df_metro <- load_dataframe("data/metro.csv")
   
   metro_dist_res <- c()
   for(ii in 1:length(coords)) {
@@ -214,6 +216,10 @@ APUTILS_fetch_apartments_page <- function(log, progress, complex_id, page, param
   if( ! "apartment_house_type" %in% colnames(df_tmp))
   {
     df_tmp["apartment_house_type"] <- NA
+  }
+  if( ! "apartment_ready_date" %in% colnames(df_tmp))
+  {
+    df_tmp["apartment_ready_date"] <- NA
   }
   if( ! "apartment_address_metro._text" %in% colnames(df_tmp))
   {

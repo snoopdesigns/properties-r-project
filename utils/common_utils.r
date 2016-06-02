@@ -1,10 +1,17 @@
-source("utils/http_utils.r")
+source("utils/encoding.r")
+
+source_utf8("utils/http_utils.r")
 
 load_dataframe <- function(filename) {
   df <- data.frame(matrix(ncol = 0, nrow = 0))
   if(file.access(filename) != -1) {
-    df <- read.csv(filename)
+    df <- read.csv(filename, encoding = "UTF-8",stringsAsFactors=FALSE)
   }
+  return(df)
+}
+
+write_dataframe <- function(df, filename) {
+  write.csv(df, file(filename, encoding = "UTF-8"),row.names=FALSE)
 }
 
 geocode_yandex <- function(location) {
@@ -19,10 +26,10 @@ geocode_yandex <- function(location) {
 
 get_value_from_cache <- function(key) {
   df_cache <- data.frame(key=character(),value=character(),stringsAsFactors=FALSE)
-  if(!file.exists("cache.csv")) {
-    write.csv(df_cache, "cache.csv", row.names=FALSE)
+  if(!file.exists("data/cache.csv")) {
+    write_dataframe(df_cache, "data/cache.csv")
   }
-  df_cache <- read.csv("cache.csv",stringsAsFactors=FALSE)
+  df_cache <- load_dataframe("data/cache.csv")
   cached_value <- df_cache[df_cache$key==as.character(key),]$value
   cached_value <- ifelse(length(cached_value)==0, NA, cached_value)
   return(cached_value)
@@ -30,17 +37,17 @@ get_value_from_cache <- function(key) {
 
 write_value_to_cache <- function(key, value) {
   df_cache <- data.frame(complex_id=character(),complex_location=character(),stringsAsFactors=FALSE)
-  if(!file.exists("cache.csv")) {
-    write.csv(df_cache, "cache.csv", row.names=FALSE)
+  if(!file.exists("data/cache.csv")) {
+    write_dataframe(df_cache, "data/cache.csv")
   }
-  df_cache <- read.csv("cache.csv",stringsAsFactors=FALSE)
+  df_cache <- load_dataframe("data/cache.csv")
   if(is.na(get_value_from_cache(key))) {
     new_row <- data.frame(key=key,value=value)
     df_cache <- rbind(df_cache, new_row)
   } else {
     df_cache$value[df_cache$key == key]  <- value
   }
-  write.csv(df_cache, "cache.csv", row.names=FALSE)
+  write_dataframe(df_cache, "data/cache.csv")
 }
 
 #val <- get_value_from_cache("key1")
