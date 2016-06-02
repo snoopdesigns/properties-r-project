@@ -30,9 +30,19 @@ APUTILS_calculate_dist_to_metro <- function(coords) {
   return(metro_dist_res)
 }
 
-# Extracting complex location by coordinates
 APUTILS_extract_accurate_complex_location <- function(log, complex_id) {
-  return(HTTP_get_accurate_complex_location(complex_id))
+  df_tmp <- HTTP_get_apartments_page(complex_id, 1, vector(mode="numeric", length=0))
+  if(nrow(df_tmp)==0) {
+    log(sprintf("Unable to extract accurate location for complex: %s", complex_id))
+    return(NA)
+  }
+  df_tmp <- df_tmp["apartment_address"]
+  df_tmp["len"] <- NA
+  df_tmp <- transform(df_tmp, len = nchar(as.character(apartment_address)))
+  df_tmp <- df_tmp[rev(order(df_tmp$len)),]
+  df_tmp <- head(df_tmp, 1)
+  res <- data.frame(lapply(df_tmp$apartment_address, as.character), stringsAsFactors=FALSE)
+  return(res[1,])
 }
 
 # Extracting complexes location by coordinates
@@ -41,7 +51,7 @@ APUTILS_extract_accurate_complexes_location <- function(log, complex_id) {
   for(ii in 1:length(complex_id)) {
     if(is.na(get_value_from_cache(complex_id[ii]))) {
       log(sprintf("Location for complex %s not found in cache, downloading...", complex_id[ii]))
-      complex_location_res[ii] <- HTTP_get_accurate_complex_location(complex_id[ii])
+      complex_location_res[ii] <- APUTILS_extract_accurate_complex_location(log,complex_id[ii])
       write_value_to_cache(complex_id[ii], complex_location_res[ii])
     } else {
       log(sprintf("Using cached location for complex %s", complex_id[ii]))
@@ -116,10 +126,6 @@ APUTILS_fetch_complexes_page <- function(log, progress, params, page, use_accura
     df_complexes_res <- transform(df_complexes_res, complex_id = ifelse(is.na(link), NA, substr(link,regexpr("\\-[^\\-]*$", as.character(link))+1,nchar(as.character(link))-1)))
     df_complexes_res <- transform(df_complexes_res, complex_id = ifelse(is.na(complex_id), NA, sub("&engine.*","",gsub("^.*newobject=", "", complex_id))))
     
-    # extracting complex location
-    # add Petersburg if there is no in address, and if not Lelingradskaya oblast'
-    df_complexes_res <- transform(df_complexes_res, complex_location = ifelse(!is.na(complex_location) & !grepl("Санкт-Петербург", as.character(complex_location)) & !grepl("Ленинградская область", as.character(complex_location)), paste("Санкт-Петербург г.", complex_location, sep = ","), as.character(complex_location)))
-    
     # extracting very accurate complex location
     if(use_accurate_location == TRUE) {
       log(sprintf("Extracting accurate location for downloaded complexes..."))
@@ -127,9 +133,9 @@ APUTILS_fetch_complexes_page <- function(log, progress, params, page, use_accura
       df_complexes_res <- transform(df_complexes_res, complex_location = APUTILS_extract_accurate_complexes_location(log, complex_id))
     }
     
-    # if there is no exact address, use stock address
-    #df_complexes_res <- transform(df_complexes_res, complex_location_accurate = ifelse(is.na(complex_location_accurate), complex_location, complex_location_accurate))
-    df_complexes_res <- transform(df_complexes_res, complex_location = ifelse(is.na(complex_location), NA, ifelse(grepl("Санкт-Петербург", complex_location) | grepl("Ленинградская область", complex_location), complex_location, paste("Санкт-Петербург,", complex_location, sep = ""))))
+    # extracting complex location
+    # add Petersburg if there is no in address, and if not Lelingradskaya oblast'
+    df_complexes_res <- transform(df_complexes_res, complex_location = ifelse(!is.na(complex_location) & !grepl("Санкт-Петербург", as.character(complex_location)) & !grepl("Ленинградская область", as.character(complex_location)), paste("Санкт-Петербург г.", complex_location, sep = ","), as.character(complex_location)))
     
     # calculating coordinates of complex
     df_complexes_res["complex_location_coords"] <- "59.914418:30.339432" # default coords
@@ -275,6 +281,8 @@ APUTILS_fetch_apartments_page <- function(log, progress, complex_id, page, param
   # Extract sell type and building type
   df_tmp["apartment_selling_type"] <- NA
   df_tmp["apartment_building_type"] <- NA
+  df_tmp <- transform(df_tmp, apartment_ready_date = ifelse(grepl("сдан",apartment_house_type), "дом сдан", apartment_ready_date))
+  df_tmp <- transform(df_tmp, apartment_house_type = ifelse(grepl("сдан",apartment_house_type), gsub(" дом сдан","",apartment_house_type), as.character(apartment_house_type)))
   df_tmp <- transform(df_tmp, apartment_selling_type = ifelse(!is.na(apartment_house_type), gsub("^.* ","",apartment_house_type), NA))
   df_tmp <- transform(df_tmp, apartment_building_type = ifelse(!is.na(apartment_house_type), gsub(" .*","",apartment_house_type), NA))
   df_tmp <- transform(df_tmp, apartment_building_type = ifelse(apartment_house_type==apartment_selling_type,NA,apartment_building_type))
@@ -356,5 +364,7 @@ APUTILS_download_apartments <- function(
 log_msg <- function(msg) {
   print(sprintf("[%s] %s", format(Sys.time(), "%D %X"), msg))
 }
+
+#res <- APUTILS_extract_accurate_complex_location(log_msg, "8401")
 
 #dataframe <- APUTILS_download(log_msg,1,1,TRUE,FALSE,vector(mode="numeric", length=0))

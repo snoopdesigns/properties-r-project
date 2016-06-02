@@ -4,8 +4,7 @@ library(googleVis)
 library(DT)
 
 # TODO LIST
-# Add more accurate complex location: load not only the first apartment address, but from entire first page
-# and select the longest address (assume it is more accurate)
+# Filter 'Сдан' in apartment_building_type
 
 source("utils/encoding.r")
 
@@ -90,7 +89,7 @@ ui <- dashboardPage(
               sliderInput("apartment_max_pages", "Apartments maximum pages:", 1, 30, 1, 1),
               checkboxInput("complexes_accurate_location", "Use accurate position for complexes",TRUE),
               checkboxInput("complexes_use_geocode", "Use geocode for complexes",TRUE),
-              checkboxGroupInput("apartments_type_filter", "Rooms type",c("1-комнатная" = "room1=1", "2-комнатная" = "room2=1", "Студия" = "room9=1")),
+              checkboxGroupInput("apartments_type_filter", "Rooms type",c("1-комнатная" = "room1=1", "2-комнатная" = "room2=1", "Студия" = "room9=1"), selected = c("1-комнатная")),
               actionButton("download", "Start downloading data"),
               width = 6
             ),
@@ -140,23 +139,27 @@ render_data <- function(output, input, rv) {
   output$apartments_plot1 <- renderPlot({
     rv$apartments
     dataframe_apartments <- load_dataframe("data/apartments.csv")
-    plot(dataframe_apartments$apartment_price, dataframe_apartments$apartment_total_area, xlab="Price", ylab = "Total Area", main="Price VS Area")
+    if(nrow(dataframe_apartments)>0) {
+      plot(dataframe_apartments$apartment_price, dataframe_apartments$apartment_total_area, xlab="Price", ylab = "Total Area", main="Price VS Area")
+    }
   })
   
   output$apartments_plot2 <- renderPlot({
     rv$apartments
     dataframe_apartments <- load_dataframe("data/apartments.csv", factors = TRUE)
-    dataframe_apartments <- dataframe_apartments[!is.na(dataframe_apartments$apartment_closest_metro),]
-    counts <- table(dataframe_apartments$apartment_closest_metro)
-    par(las=2)
-    par(oma=c(5,5,5,5))
-    barplot(counts, main="Metro",ylab="Number of apartments")
+    if(nrow(dataframe_apartments)>0) {
+      dataframe_apartments <- dataframe_apartments[!is.na(dataframe_apartments$apartment_closest_metro),]
+      counts <- table(dataframe_apartments$apartment_closest_metro)
+      par(las=2)
+      par(oma=c(5,0,0,0))
+      barplot(counts, main="Metro",ylab="Number of apartments")
+    }
   })
   
   output$complexes_table <- renderDataTable({
     rv$complexes
     dataframe_complexes <- load_dataframe("data/complexes.csv")
-    if (ncol(dataframe_complexes) > 0) {
+    if (nrow(dataframe_complexes) > 0) {
       datatable(
         subset(dataframe_complexes, select = complexes_select), 
         colnames = complexes_select_columns, 
@@ -243,6 +246,8 @@ server <- function(input, output,session) {
     write_dataframe(dataframe_apartments, "data/apartments.csv")  
     progress$close()
     isolate(rv$apartments <- rv$apartments + 1)
+    
+    log_msg("Done downloading data")
   })
 }
 
