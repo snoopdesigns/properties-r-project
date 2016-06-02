@@ -3,6 +3,8 @@ library(plyr)
 library(ggmap)
 library(geosphere)
 
+setwd("/home/dimka/PROJECTS/properties-r-project/")
+
 source("utils/encoding.r")
 
 source_utf8("utils/http_utils.r")
@@ -129,7 +131,7 @@ APUTILS_fetch_complexes_page <- function(log, progress, params, page, use_accura
     # extracting very accurate complex location
     if(use_accurate_location == TRUE) {
       log(sprintf("Extracting accurate location for downloaded complexes..."))
-      progress$set(detail = "Extracting accurate location for downloaded complexes...")
+      progress$set(detail = "Extracting accurate location")
       df_complexes_res <- transform(df_complexes_res, complex_location = APUTILS_extract_accurate_complexes_location(log, complex_id))
     }
     
@@ -219,13 +221,9 @@ APUTILS_fetch_apartments_page <- function(log, progress, complex_id, page, param
   {
     df_tmp["apartment_rooms_num"] <- NA
   }
-  if( ! "apartment_house_type" %in% colnames(df_tmp))
+  if( ! "apartment_house_info" %in% colnames(df_tmp))
   {
-    df_tmp["apartment_house_type"] <- NA
-  }
-  if( ! "apartment_ready_date" %in% colnames(df_tmp))
-  {
-    df_tmp["apartment_ready_date"] <- NA
+    df_tmp["apartment_house_info"] <- NA
   }
   if( ! "apartment_address_metro._text" %in% colnames(df_tmp))
   {
@@ -266,7 +264,8 @@ APUTILS_fetch_apartments_page <- function(log, progress, complex_id, page, param
   df_tmp["apartment_floor_number"] <- NA
   df_tmp["apartment_floor_total"] <- NA
   df_tmp <- transform(df_tmp, apartment_floor_number = ifelse(!is.na(apartment_floor) & grepl("этаж",apartment_floor), as.numeric(gsub(" этаж.*","",apartment_floor)), NA))
-  df_tmp <- transform(df_tmp, apartment_floor_total = ifelse(!is.na(apartment_floor) & grepl("этаж",apartment_floor), as.numeric(gsub("^.*из ","",apartment_floor)), NA))
+  df_tmp <- transform(df_tmp, apartment_floor_total = ifelse(!is.na(apartment_floor) & grepl("этаж",apartment_floor) & grepl("из",apartment_floor), gsub("^.*из ","",apartment_floor), NA))
+  df_tmp <- transform(df_tmp, apartment_floor_total = ifelse(!is.na(apartment_floor_total), as.numeric(apartment_floor_total), NA))
   
   # Extract apartment link
   df_tmp["apartment_link"] <- NA
@@ -274,18 +273,23 @@ APUTILS_fetch_apartments_page <- function(log, progress, complex_id, page, param
   
   # Extract apartment type
   df_tmp["apartment_type"] <- df_tmp["apartment_rooms_num"]
-  # df_tmp <- transform(df_tmp, apartment_type = ifelse(!is.na(apartment_rooms_num) & grepl("комнатная",apartment_rooms_num), gsub("-комнатная","",apartment_rooms_num), NA))
-  # df_tmp <- transform(df_tmp, apartment_type = ifelse(!is.na(apartment_rooms_num) & grepl("Студия",apartment_rooms_num), gsub("Студия","0",apartment_rooms_num), apartment_type))
-  # df_tmp <- transform(df_tmp, apartment_type = as.numeric(apartment_type))
   
-  # Extract sell type and building type
+  # Extract sell type, building type and ready date
   df_tmp["apartment_selling_type"] <- NA
   df_tmp["apartment_building_type"] <- NA
-  df_tmp <- transform(df_tmp, apartment_ready_date = ifelse(grepl("сдан",apartment_house_type), "дом сдан", apartment_ready_date))
-  df_tmp <- transform(df_tmp, apartment_house_type = ifelse(grepl("сдан",apartment_house_type), gsub(" дом сдан","",apartment_house_type), as.character(apartment_house_type)))
-  df_tmp <- transform(df_tmp, apartment_selling_type = ifelse(!is.na(apartment_house_type), gsub("^.* ","",apartment_house_type), NA))
-  df_tmp <- transform(df_tmp, apartment_building_type = ifelse(!is.na(apartment_house_type), gsub(" .*","",apartment_house_type), NA))
-  df_tmp <- transform(df_tmp, apartment_building_type = ifelse(apartment_house_type==apartment_selling_type,NA,apartment_building_type))
+  df_tmp["apartment_ready_date"] <- NA
+  
+  df_tmp <- transform(df_tmp, apartment_selling_type = ifelse(!is.na(apartment_house_info), ifelse(grepl("новостройка",apartment_house_info),"новостройка",apartment_selling_type),NA))
+  df_tmp <- transform(df_tmp, apartment_selling_type = ifelse(!is.na(apartment_house_info), ifelse(grepl("вторичка",apartment_house_info),"вторичка",apartment_selling_type),NA))
+  
+  df_tmp <- transform(df_tmp, apartment_building_type = ifelse(!is.na(apartment_house_info), ifelse(grepl("кирпичный",apartment_house_info),"кирпичный",apartment_building_type),NA))
+  df_tmp <- transform(df_tmp, apartment_building_type = ifelse(!is.na(apartment_house_info), ifelse(grepl("кирпично-монолитный",apartment_house_info),"кирпично-монолитный",apartment_building_type),NA))
+  df_tmp <- transform(df_tmp, apartment_building_type = ifelse(!is.na(apartment_house_info), ifelse(grepl(" монолитный ",apartment_house_info),"монолитный",apartment_building_type),NA))
+  df_tmp <- transform(df_tmp, apartment_building_type = ifelse(!is.na(apartment_house_info), ifelse(grepl("панельный ",apartment_house_info),"панельный",apartment_building_type),NA))
+  
+  df_tmp <- transform(df_tmp, apartment_ready_date = ifelse(!is.na(apartment_house_info), ifelse(grepl("дом сдан",apartment_house_info),"дом сдан",apartment_ready_date),NA))
+  df_tmp <- transform(df_tmp, apartment_ready_date = ifelse(!is.na(apartment_house_info), ifelse(grepl("сдача ГК",apartment_house_info),gsub("^.*ГК:","",apartment_house_info),apartment_ready_date),NA))
+  df_tmp <- transform(df_tmp, apartment_ready_date = ifelse(grepl("—",apartment_ready_date), NA, apartment_ready_date))
   
   # Extract distance to metro and closest metro
   df_tmp["apartment_closest_metro"] <- NA
@@ -325,7 +329,7 @@ APUTILS_download_complexes <- function(
   log(sprintf("Maximum number of complexes pages to download: %d", complexes_max_pages))
   
   for (complex_page_i in 1:complexes_max_pages) {
-    progress$set(value = complex_page_i/complexes_max_pages, detail = sprintf("Downloading complex page: %d", complex_page_i))
+    progress$set(value = complex_page_i, detail = sprintf("Downloading complex page: %d", complex_page_i))
     df_complexes_tmp <- APUTILS_fetch_complexes_page(log, progress, params, complex_page_i, use_accurate_location, use_geocode)
     if (nrow(df_complexes_tmp) > 0) {
       df_complexes <- rbind(df_complexes_tmp, df_complexes)
@@ -348,7 +352,7 @@ APUTILS_download_apartments <- function(
   log(sprintf("Maximum number of apartments pages to download: %d", apartment_max_pages))
   
   for (complex_id_i in 1:nrow(complex_ids)) {
-    progress$set(value = as.numeric(complex_ids[complex_id_i,])/nrow(complex_ids), detail = sprintf("Downloading apartments for complex: %s", complex_ids[complex_id_i,]))
+    progress$set(value = as.numeric(complex_id_i), detail = sprintf("Downloading apartments: %s", complex_ids[complex_id_i,]))
     for (apartments_page_i in 1:apartment_max_pages) {
       df_apartments_tmp <- APUTILS_fetch_apartments_page(log,progress,complex_ids[complex_id_i,], apartments_page_i, params)
       if (nrow(df_apartments_tmp) > 0) {
@@ -364,6 +368,10 @@ APUTILS_download_apartments <- function(
 log_msg <- function(msg) {
   print(sprintf("[%s] %s", format(Sys.time(), "%D %X"), msg))
 }
+
+#params <- vector(mode="numeric", length=0)
+#params <- append(params, "room1=1")
+#df <- APUTILS_fetch_apartments_page(log_msg,shiny::Progress$new(session, min=0, max=1),"5084", 2, params)
 
 #res <- APUTILS_extract_accurate_complex_location(log_msg, "8401")
 

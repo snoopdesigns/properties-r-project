@@ -11,7 +11,9 @@ source("utils/encoding.r")
 source_utf8("utils/apartments_utils.r")
 source_utf8("utils/common_utils.r")
 
+# Common configuration
 setwd(".")
+options(scipen=999)
 
 complexes_select = c(
   "complex_name",
@@ -89,7 +91,7 @@ ui <- dashboardPage(
               sliderInput("apartment_max_pages", "Apartments maximum pages:", 1, 30, 1, 1),
               checkboxInput("complexes_accurate_location", "Use accurate position for complexes",TRUE),
               checkboxInput("complexes_use_geocode", "Use geocode for complexes",TRUE),
-              checkboxGroupInput("apartments_type_filter", "Rooms type",c("1-комнатная" = "room1=1", "2-комнатная" = "room2=1", "Студия" = "room9=1"), selected = c("1-комнатная")),
+              checkboxGroupInput("apartments_type_filter", "Rooms type",c("1-комнатная" = "room1=1", "2-комнатная" = "room2=1", "Студия" = "room9=1"), selected = c("room1=1")),
               actionButton("download", "Start downloading data"),
               width = 6
             ),
@@ -231,7 +233,7 @@ server <- function(input, output,session) {
       
     # Downloading complexes
     dataframe_complexes <- data.frame(matrix(ncol = 0, nrow = 0))
-    progress <- shiny::Progress$new(session, min=0, max=1)
+    progress <- shiny::Progress$new(session, min=0, max=input$complexes_max_pages)
     progress$set(message = 'COMPLEXES', detail = 'downloading complexes...')
     dataframe_complexes <- APUTILS_download_complexes(log_msg, progress, input$complexes_max_pages, input$complexes_accurate_location, input$complexes_use_geocode, params)
     write_dataframe(dataframe_complexes, "data/complexes.csv")      
@@ -240,7 +242,7 @@ server <- function(input, output,session) {
     
     # Downloading apartments
     dataframe_apartments <- data.frame(matrix(ncol = 0, nrow = 0))
-    progress <- shiny::Progress$new(session, min=0, max=1)
+    progress <- shiny::Progress$new(session, min=0, max=nrow(dataframe_complexes))
     progress$set(message = 'APARTMENTS', detail = 'downloading apartments...')
     dataframe_apartments <- APUTILS_download_apartments(log_msg, progress, dataframe_complexes["complex_id"], input$apartment_max_pages, params)
     write_dataframe(dataframe_apartments, "data/apartments.csv")  
