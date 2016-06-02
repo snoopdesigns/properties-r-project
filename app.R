@@ -139,18 +139,18 @@ render_data <- function(output, input, rv) {
   
   output$apartments_plot1 <- renderPlot({
     rv$apartments
-    barplot(WorldPhones[,"N.Amer"]*1000, 
-            main="N.Amer",
-            ylab="Number of Telephones",
-            xlab="Year")
+    dataframe_apartments <- load_dataframe("data/apartments.csv")
+    plot(dataframe_apartments$apartment_price, dataframe_apartments$apartment_total_area, xlab="Price", ylab = "Total Area", main="Price VS Area")
   })
   
   output$apartments_plot2 <- renderPlot({
     rv$apartments
-    barplot(WorldPhones[,"N.Amer"]*1000, 
-            main="N.Amer",
-            ylab="Number of Telephones",
-            xlab="Year")
+    dataframe_apartments <- load_dataframe("data/apartments.csv", factors = TRUE)
+    dataframe_apartments <- dataframe_apartments[!is.na(dataframe_apartments$apartment_closest_metro),]
+    counts <- table(dataframe_apartments$apartment_closest_metro)
+    par(las=2)
+    par(oma=c(5,5,5,5))
+    barplot(counts, main="Metro",ylab="Number of apartments")
   })
   
   output$complexes_table <- renderDataTable({

@@ -2,10 +2,10 @@ source("utils/encoding.r")
 
 source_utf8("utils/http_utils.r")
 
-load_dataframe <- function(filename) {
+load_dataframe <- function(filename, factors = FALSE) {
   df <- data.frame(matrix(ncol = 0, nrow = 0))
   if(file.access(filename) != -1) {
-    df <- read.csv(filename, encoding = "UTF-8",stringsAsFactors=FALSE)
+    df <- read.csv(filename, encoding = "UTF-8",stringsAsFactors =factors)
   }
   return(df)
 }
