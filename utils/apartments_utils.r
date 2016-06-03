@@ -3,7 +3,7 @@ library(plyr)
 library(ggmap)
 library(geosphere)
 
-setwd("/home/dimka/PROJECTS/properties-r-project/")
+#setwd("/home/dimka/PROJECTS/properties-r-project/")
 
 source("utils/encoding.r")
 
