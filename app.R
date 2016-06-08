@@ -81,6 +81,16 @@ ui <- dashboardPage(
     )
   ),
   dashboardBody(
+    tags$head(
+      tags$style(
+        HTML(
+              "#logTextBox{ 
+              overflow-y: scroll; 
+              overflow-x: hidden; 
+              height:250px;}"
+            )
+      )
+    ),
     tabItems(
       tabItem("download_data", 
         fluidRow(
@@ -96,8 +106,16 @@ ui <- dashboardPage(
               width = 6
             ),
             column(
-              textOutput("currentTime"),
+              htmlOutput("dataStats"),
               width = 6
+            ),
+            width = 12
+          ),
+          box(
+            title = "Processing logs",solidHeader = TRUE,collapsible = TRUE,status="success",
+            column(
+              div(id="logTextBox",htmlOutput("logOutput")),
+              width = 12
             ),
             width = 12
           )
@@ -136,7 +154,34 @@ ui <- dashboardPage(
   )
 )
 
+render_logs <- function(output, input, session) {
+  pollData <- reactivePoll(4000, session,
+    checkFunc = function() {
+      if (file.exists("data/log.txt"))
+        file.info("data/log.txt")$mtime[1]
+      else
+        ""
+    },
+    valueFunc = function() {
+      readLines("data/log.txt",encoding = "UTF-8")
+    }
+  )
+  output$logOutput <- renderText({
+    text <- pollData()
+    text
+  })
+}
+
 render_data <- function(output, input, rv) {
+  
+  output$dataStats <- renderText({
+    rv$apartments
+    dataframe_apartments <- load_dataframe("data/apartments.csv")
+    dataframe_complexes <- load_dataframe("data/complexes.csv")
+    res <- "<b>Data statistics:</b>"
+    res <- paste(res, paste("Complexes amount", as.character(nrow(dataframe_complexes)), sep = ": "), sep = "<br>")
+    res <- paste(res, paste("Apartments amount", as.character(nrow(dataframe_apartments)), sep = ": "), sep = "<br>")
+  })
   
   output$apartments_plot1 <- renderPlot({
     rv$apartments
@@ -208,18 +253,16 @@ render_data <- function(output, input, rv) {
 }
 
 log_msg <- function(msg) {
-  print(sprintf("[%s] %s", format(Sys.time(), "%D %X"), msg))
+  msg <- sprintf("<b>[%s]</b> %s", format(Sys.time(), "%D %X"), msg)
+  print(msg)
+  cat(msg, '<br>', file = "data/log.txt",append = TRUE)
 }
 
 server <- function(input, output,session) { 
   
   rv <- reactiveValues(complexes = 0, apartments = 0)
   
-  output$currentTime <- renderText({
-    invalidateLater(1000, session)
-    paste("The current time is", Sys.time())
-  })
-  
+  render_logs(output, input, session)
   render_data(output, input, rv)
   
   observeEvent(input$download, {
@@ -252,5 +295,5 @@ server <- function(input, output,session) {
     log_msg("Done downloading data")
   })
 }
-
+log_msg("App started")
 shinyApp(ui, server)
