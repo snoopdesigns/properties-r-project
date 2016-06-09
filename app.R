@@ -10,6 +10,7 @@ source("utils/encoding.r")
 
 source_utf8("utils/apartments_utils.r")
 source_utf8("utils/common_utils.r")
+source_utf8("utils/model_utils.r")
 
 # Common configuration
 setwd(".")
@@ -49,8 +50,10 @@ apartments_select = c(
   "apartment_floor_total",
   "apartment_has_balkony",
   "apartment_has_loggia",
-  "apartment_price",
-  "apartment_link"
+  "apartment_link",
+  "apartment_price_meter",
+  "apartment_price"
+  
 )
 apartments_select_columns = c(
   "Компл",
@@ -65,9 +68,13 @@ apartments_select_columns = c(
   "Этаж вс",
   "Балк",
   "Лодж",
-  "Цена",
-  "W"
+  "W",
+  "Цена кв",
+  "Цена"
 )
+
+model_res_select = append(apartments_select, c("apartment_price_pred","percents","apartment_benefit_price"))
+model_res_select_columns = append(apartments_select_columns, c("Ц п","Прц","Выг"))
 
 ui <- dashboardPage(
   dashboardHeader(
@@ -77,7 +84,8 @@ ui <- dashboardPage(
     sidebarMenu(
       menuItem("Download Data", tabName = "download_data", icon = icon("sliders")),
       menuItem("Complexes", tabName = "complexes_data", icon = icon("building")),
-      menuItem("Apartments", tabName = "apartments_data", icon = icon("database"))
+      menuItem("Apartments", tabName = "apartments_data", icon = icon("database")),
+      menuItem("Modelling", tabName = "model_data", icon = icon("database"))
     )
   ),
   dashboardBody(
@@ -135,7 +143,7 @@ ui <- dashboardPage(
       tabItem("apartments_data",
         fluidRow(
           box(
-            title = "Apartments information",solidHeader = TRUE,collapsible = TRUE,status="info",
+            title = "Apartments statistics",solidHeader = TRUE,collapsible = TRUE,status="info",
             column(
               plotOutput('apartments_plot1'),
               width = 6
@@ -144,8 +152,53 @@ ui <- dashboardPage(
               plotOutput('apartments_plot2'),
               width = 6
             ),
-            HTML("<hr>"),
+            column(
+              sliderInput("apartment_price_filter", "Apartments price filter:", min = 1000000, max = 10000000, value = c(1500000, 3500000), step = 100000),
+              width = 12
+            ),
+            width = 12
+          )
+        ),
+        fluidRow(
+          box(
+            title = "Apartments table",solidHeader = TRUE,collapsible = TRUE,status="info",
             dataTableOutput("apartments_table"),
+            width = 12
+          )
+        )
+      ),
+      tabItem("model_data",
+        fluidRow(
+          box(
+            title = "Data modelling",solidHeader = TRUE,collapsible = TRUE,status="info",
+            column(
+              htmlOutput("model_stats"),
+              HTML("<hr>"),
+              sliderInput("model_price_filter", "Price filter:", min = 1000000, max = 10000000, value = c(1500000, 3500000), step = 100000),
+              sliderInput("model_threshold", "Minimum threshold:", 1, 30, 10, 1),
+              actionButton("modelling", "Build model"),
+              width = 6
+            ),
+            column(
+              plotOutput("model_res_plot1"),
+              width = 6
+            ),
+            column(
+              htmlOutput("model_res_map"),
+              width = 6
+            ),
+            column(
+              plotOutput("model_res_plot2"),
+              width = 6
+            ),
+            width = 12
+          ),
+          box(
+            title = "Model Table",solidHeader = TRUE,collapsible = TRUE,status="info",
+            column(
+              dataTableOutput("model_res_table"),
+              width = 12
+            ),
             width = 12
           )
         )
@@ -174,10 +227,22 @@ render_logs <- function(output, input, session) {
 
 render_data <- function(output, input, rv) {
   
+  output$model_stats <- renderText({
+    rv$model_res
+    dataframe_apartments <- COMMONUTILS_load_dataframe("data/apartments.csv")
+    dataframe_model_res <- COMMONUTILS_load_dataframe("data/model_res.csv")
+    percents <- MODELUTILS_percent(as.numeric(nrow(dataframe_model_res) / nrow(dataframe_apartments)))
+    model_error <- ifelse(nrow(dataframe_model_res) > 0, dataframe_model_res[1,]$predict_error, NA)
+    res <- "<b>Model statistics:</b>"
+    res <- paste(res, paste("Apartments amount", as.character(nrow(dataframe_apartments)), sep = ": "), sep = "<br>")
+    res <- paste(res, sprintf("Used in modelling: %d (%s percents)", nrow(dataframe_model_res), percents), sep = "<br>")
+    res <- paste(res, sprintf("Model error: %.1f percents", model_error), sep = "<br>")
+  })
+  
   output$dataStats <- renderText({
     rv$apartments
-    dataframe_apartments <- load_dataframe("data/apartments.csv")
-    dataframe_complexes <- load_dataframe("data/complexes.csv")
+    dataframe_apartments <- COMMONUTILS_load_dataframe("data/apartments.csv")
+    dataframe_complexes <- COMMONUTILS_load_dataframe("data/complexes.csv")
     res <- "<b>Data statistics:</b>"
     res <- paste(res, paste("Complexes amount", as.character(nrow(dataframe_complexes)), sep = ": "), sep = "<br>")
     res <- paste(res, paste("Apartments amount", as.character(nrow(dataframe_apartments)), sep = ": "), sep = "<br>")
@@ -185,7 +250,8 @@ render_data <- function(output, input, rv) {
   
   output$apartments_plot1 <- renderPlot({
     rv$apartments
-    dataframe_apartments <- load_dataframe("data/apartments.csv")
+    dataframe_apartments <- COMMONUTILS_load_dataframe("data/apartments.csv")
+    dataframe_apartments <- dataframe_apartments[dataframe_apartments$apartment_price >= input$apartment_price_filter[1] & dataframe_apartments$apartment_price <= input$apartment_price_filter[2],]
     if(nrow(dataframe_apartments)>0) {
       plot(dataframe_apartments$apartment_price, dataframe_apartments$apartment_total_area, xlab="Price", ylab = "Total Area", main="Price VS Area")
     }
@@ -193,7 +259,8 @@ render_data <- function(output, input, rv) {
   
   output$apartments_plot2 <- renderPlot({
     rv$apartments
-    dataframe_apartments <- load_dataframe("data/apartments.csv", factors = TRUE)
+    dataframe_apartments <- COMMONUTILS_load_dataframe("data/apartments.csv", factors = TRUE)
+    dataframe_apartments <- dataframe_apartments[dataframe_apartments$apartment_price >= input$apartment_price_filter[1] & dataframe_apartments$apartment_price <= input$apartment_price_filter[2],]
     if(nrow(dataframe_apartments)>0) {
       dataframe_apartments <- dataframe_apartments[!is.na(dataframe_apartments$apartment_closest_metro),]
       counts <- table(dataframe_apartments$apartment_closest_metro)
@@ -203,15 +270,31 @@ render_data <- function(output, input, rv) {
     }
   })
   
+  output$model_res_plot1 <- renderPlot({
+    rv$model_res
+    load("rf-res.data")
+    varImpPlot(data.rf, type = 2, main = "Variable importance")
+  })
+  
+  output$model_res_plot2 <- renderPlot({
+    rv$model_res
+    dataframe_model_res <- COMMONUTILS_load_dataframe("data/model_res.csv")
+    dataframe_model_res <- dataframe_model_res[dataframe_model_res$apartment_price >= input$model_price_filter[1] & dataframe_model_res$apartment_price <= input$model_price_filter[2],]
+    plot(dataframe_model_res$apartment_price_pred, dataframe_model_res$apartment_price)
+    par(new=TRUE, col="red")
+    dependency <- lm(dataframe_model_res$apartment_price_pred ~ dataframe_model_res$apartment_price)
+    abline(dependency) 
+  })
+  
   output$complexes_table <- renderDataTable({
     rv$complexes
-    dataframe_complexes <- load_dataframe("data/complexes.csv")
+    dataframe_complexes <- COMMONUTILS_load_dataframe("data/complexes.csv")
     if (nrow(dataframe_complexes) > 0) {
       datatable(
         subset(dataframe_complexes, select = complexes_select), 
         colnames = complexes_select_columns, 
         escape = FALSE,
-        options = list(paging = FALSE)
+        options = list(paging = FALSE,pageLength = 100)
       )
     } else {
       datatable(data.frame(matrix(ncol = 0, nrow = 0)))
@@ -220,18 +303,34 @@ render_data <- function(output, input, rv) {
   
   output$apartments_table <- renderDataTable({
     rv$apartments
-    dataframe_complexes <- load_dataframe("data/complexes.csv")
-    dataframe_apartments <- load_dataframe("data/apartments.csv")
+    dataframe_complexes <- COMMONUTILS_load_dataframe("data/complexes.csv")
+    dataframe_apartments <- COMMONUTILS_load_dataframe("data/apartments.csv")
     if(nrow(dataframe_apartments)>0 & nrow(dataframe_complexes)>0) {
       dataframe_apartments <- merge(dataframe_complexes, dataframe_apartments, by.x = "complex_id", by.y = "complex_id")
-      dataframe_apartments <- transform(dataframe_apartments, apartment_link = sprintf('<a href="%s">*</a>', apartment_link))
+      dataframe_apartments <- transform(dataframe_apartments, apartment_link = sprintf('<a href="%s" target="_blank">*</a>', apartment_link))
     }
     if (ncol(dataframe_apartments) > 0) {
       datatable(
-        subset(dataframe_apartments, select = apartments_select), 
+        subset(dataframe_apartments[dataframe_apartments$apartment_price >= input$apartment_price_filter[1] & dataframe_apartments$apartment_price <= input$apartment_price_filter[2],], select = apartments_select), 
         colnames = apartments_select_columns,  
         escape = FALSE,
-        options = list(paging = FALSE)
+        options = list(pageLength = 100)
+      )
+    } else {
+      datatable(data.frame(matrix(ncol = 0, nrow = 0)))
+    }
+  })
+  
+  output$model_res_table <- renderDataTable({
+    rv$model_res
+    dataframe_model_res <- COMMONUTILS_load_dataframe("data/model_res.csv")
+    dataframe_model_res <- transform(dataframe_model_res, apartment_link = sprintf('<a href="%s" target="_blank">*</a>', apartment_link))
+    if (ncol(dataframe_model_res) > 0) {
+      datatable(
+        subset(dataframe_model_res[dataframe_model_res$percents >= input$model_threshold & dataframe_model_res$apartment_price >= input$model_price_filter[1] & dataframe_model_res$apartment_price <= input$model_price_filter[2],], select = model_res_select),
+        colnames = model_res_select_columns,  
+        escape = FALSE,
+        options = list(pageLength = 100)
       )
     } else {
       datatable(data.frame(matrix(ncol = 0, nrow = 0)))
@@ -240,7 +339,7 @@ render_data <- function(output, input, rv) {
     
   output$complexes_map <- renderGvis({
     rv$complexes
-    dataframe_complexes <- load_dataframe("data/complexes.csv")
+    dataframe_complexes <- COMMONUTILS_load_dataframe("data/complexes.csv")
     if (ncol(dataframe_complexes) > 0) {
       dataframe_complexes["map_tip"] <- ""
       dataframe_complexes <- transform(dataframe_complexes, map_tip = paste(complex_name,complex_location,paste("Кол-во квартир:", complex_apartment_count,sep=" "),sep = "<br>"))
@@ -248,6 +347,27 @@ render_data <- function(output, input, rv) {
         mapType='normal', 
         enableScrollWheel=TRUE, 
         showTip=TRUE))
+    }
+  })
+  
+  output$model_res_map <- renderGvis({
+    rv$model_res
+    dataframe_model_res <- COMMONUTILS_load_dataframe("data/model_res.csv")
+    dataframe_model_res <- dataframe_model_res[dataframe_model_res$percents >= input$model_threshold & dataframe_model_res$apartment_price >= input$model_price_filter[1] & dataframe_model_res$apartment_price <= input$model_price_filter[2],]
+    dataframe_model_res <- transform(dataframe_model_res, complex_location_coords = MODELUTILS_randomize_ap_coords(complex_location_coords))
+    if (ncol(dataframe_model_res) > 0 && nrow(dataframe_model_res)) {
+      dataframe_model_res["map_tip"] <- ""
+      dataframe_model_res <- transform(dataframe_model_res, map_tip = sprintf("%s<br>Цена: %d<br>Выгода: %d (%.1f прц)", complex_name, apartment_price, apartment_benefit_price, percents))
+      gvisMap(dataframe_model_res, "complex_location_coords", "map_tip", options=list(
+        mapType='normal', 
+        enableScrollWheel=TRUE, 
+        showTip=TRUE))
+    } else {
+      empty_df <- data.frame(locationvar = character(0), tipvar = character(0))
+      gvisMap(empty_df, "locationvar", "tipvar", options=list(
+        mapType='normal', 
+        enableScrollWheel=FALSE, 
+        showTip=FALSE))
     }
   })
 }
@@ -260,7 +380,7 @@ log_msg <- function(msg) {
 
 server <- function(input, output,session) { 
   
-  rv <- reactiveValues(complexes = 0, apartments = 0)
+  rv <- reactiveValues(complexes = 0, apartments = 0, model_res = 0)
   
   render_logs(output, input, session)
   render_data(output, input, rv)
@@ -279,7 +399,7 @@ server <- function(input, output,session) {
     progress <- shiny::Progress$new(session, min=0, max=input$complexes_max_pages)
     progress$set(message = 'COMPLEXES', detail = 'downloading complexes...')
     dataframe_complexes <- APUTILS_download_complexes(log_msg, progress, input$complexes_max_pages, input$complexes_accurate_location, input$complexes_use_geocode, params)
-    write_dataframe(dataframe_complexes, "data/complexes.csv")      
+    COMMONUTILS_write_dataframe(dataframe_complexes, "data/complexes.csv")      
     progress$close()
     isolate(rv$complexes <- rv$complexes + 1)
     
@@ -288,11 +408,28 @@ server <- function(input, output,session) {
     progress <- shiny::Progress$new(session, min=0, max=nrow(dataframe_complexes))
     progress$set(message = 'APARTMENTS', detail = 'downloading apartments...')
     dataframe_apartments <- APUTILS_download_apartments(log_msg, progress, dataframe_complexes["complex_id"], input$apartment_max_pages, params)
-    write_dataframe(dataframe_apartments, "data/apartments.csv")  
+    COMMONUTILS_write_dataframe(dataframe_apartments, "data/apartments.csv")  
     progress$close()
     isolate(rv$apartments <- rv$apartments + 1)
     
     log_msg("Done downloading data")
+  })
+  
+  observeEvent(input$modelling, {
+    progress <- shiny::Progress$new(session, min=0, max=10)
+    progress$set(message = 'MODELLING', detail = 'preparing dataset...')   
+    
+    df_complexes <- load_dataframe("data/complexes.csv", factors = TRUE)
+    df_apartments <- load_dataframe("data/apartments.csv", factors = TRUE)
+    df_apartments <- merge(x = df_complexes, y = df_apartments, by = "complex_id", all = TRUE)
+    
+    dataframe_model_res <- MODELUTILS_run_model(log_msg, progress, df_apartments)
+    COMMONUTILS_write_dataframe(dataframe_model_res, "data/model_res.csv") 
+    
+    progress$close()
+    isolate(rv$model_res <- rv$model_res + 1)
+    
+    log_msg("Done modelling")
   })
 }
 log_msg("App started")

@@ -309,10 +309,14 @@ APUTILS_fetch_apartments_page <- function(log, progress, complex_id, page, param
   df_tmp <- transform(df_tmp, apartment_has_balkony = ifelse(!is.na(apartment_lift_balkon),ifelse(grepl("есть балкон",apartment_lift_balkon), TRUE, FALSE), NA))
   df_tmp <- transform(df_tmp, apartment_has_loggia = ifelse(!is.na(apartment_lift_balkon),ifelse(grepl("есть лоджия",apartment_lift_balkon), TRUE, FALSE), NA))
 
+  df_tmp["apartment_price_meter"] <- NA
+  # Calculate price for meter
+  df_tmp <- transform(df_tmp, apartment_price_meter = round(as.numeric(apartment_price / apartment_total_area)))
+  
   # Add complex_id to every row
   df_tmp["complex_id"] <- complex_id
   
-  df_apartments_res <- subset(df_tmp, select = c("complex_id","apartment_address","apartment_seller","apartment_seller_tel","apartment_selling_type","apartment_building_type","apartment_ready_date","official_offer","apartment_type","apartment_total_area","apartment_living_area","apartment_kitchen_area","apartment_floor_number","apartment_floor_total","apartment_has_service_elevator","apartment_has_pass_elevator","apartment_has_balkony","apartment_has_loggia","apartment_closest_metro","apartment_closest_metro_dist_time","apartment_closest_metro_dist_type","apartment_price","apartment_link"))
+  df_apartments_res <- subset(df_tmp, select = c("complex_id","apartment_address","apartment_seller","apartment_seller_tel","apartment_selling_type","apartment_building_type","apartment_ready_date","official_offer","apartment_type","apartment_total_area","apartment_living_area","apartment_kitchen_area","apartment_floor_number","apartment_floor_total","apartment_has_service_elevator","apartment_has_pass_elevator","apartment_has_balkony","apartment_has_loggia","apartment_closest_metro","apartment_closest_metro_dist_time","apartment_closest_metro_dist_type","apartment_price_meter", "apartment_price","apartment_link"))
   return(df_apartments_res)
 }
 

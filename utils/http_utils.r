@@ -1,10 +1,5 @@
 # This file contains basic function to make HTTP requests
 
-# Make basic GET request
-make_http_get_request_plain <- function(request_url) {
-  return(content(GET(request_url)))
-}
-
 # Make basic GET request to import.io
 make_http_get_request <- function(request_url, params, connector_id) {
   for(param_val in params){
@@ -16,7 +11,19 @@ make_http_get_request <- function(request_url, params, connector_id) {
   connector_url <- paste(connector_url,request_url,sep = "")
   connector_url <- paste("https://api.import.io/",connector_url,sep = "")
   connector_url <- paste(connector_url,"&_apikey=989ea9076b88409cb4e74edeacb3cf09e64795a742ab4da46fcb22768fb4846654053771f7f6dfc47e1a7cf9a48b7913f7e7d9dbbdf7c29b520474566e552d942518d90f046507c079fa67ab4d65c48a",sep = "")
-  return(content(GET(connector_url))$results)
+  tryCatch({
+      return(content(GET(connector_url))$results)
+    },
+    error = function(e) {
+      print("Unable to get HTTP results!")
+      return(data.frame(matrix(ncol = 0, nrow = 0)))
+    }
+  )
+}
+
+# Make basic GET request
+HTTP_make_http_get_request_plain <- function(request_url) {
+  return(content(GET(request_url)))
 }
 
 # Get results for complexes page
