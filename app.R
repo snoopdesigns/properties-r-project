@@ -23,6 +23,7 @@ complexes_select = c(
   "complex_ready_date",
   "complex_location",
   "complex_location_coords",
+  "complex_location_dist_to_center",
   "complex_closest_metro",
   "geocoding_accurate"
 )
@@ -33,6 +34,7 @@ complexes_select_columns = c(
   "Готовность",
   "Адрес",
   "Координаты",
+  "Дист.ц",
   "Метро",
   "Точное положение?"
 )
@@ -85,7 +87,8 @@ ui <- dashboardPage(
       menuItem("Download Data", tabName = "download_data", icon = icon("sliders")),
       menuItem("Complexes", tabName = "complexes_data", icon = icon("building")),
       menuItem("Apartments", tabName = "apartments_data", icon = icon("database")),
-      menuItem("Modelling", tabName = "model_data", icon = icon("database"))
+      menuItem("Modelling", tabName = "model_data", icon = icon("database")),
+      menuItem("Data Statistics", tabName = "data_stats", icon = icon("database"))
     )
   ),
   dashboardBody(
@@ -202,6 +205,29 @@ ui <- dashboardPage(
             width = 12
           )
         )
+      ),
+      tabItem("data_stats",
+        fluidRow(
+          box(
+            column(
+              plotOutput("data_stats_plot1"),
+              width = 6
+            ),
+            column(
+              plotOutput("data_stats_plot2"),
+              width = 6
+            ),
+            column(
+              plotOutput("data_stats_plot3"),
+              width = 6
+            ),
+            column(
+              plotOutput("data_stats_plot4"),
+              width = 6
+            ),
+            width = 12
+          )
+        )
       )
     )
   )
@@ -227,6 +253,7 @@ render_logs <- function(output, input, session) {
 
 render_data <- function(output, input, rv) {
   
+  # Rendering plain texts
   output$model_stats <- renderText({
     rv$model_res
     dataframe_apartments <- COMMONUTILS_load_dataframe("data/apartments.csv")
@@ -248,6 +275,7 @@ render_data <- function(output, input, rv) {
     res <- paste(res, paste("Apartments amount", as.character(nrow(dataframe_apartments)), sep = ": "), sep = "<br>")
   })
   
+  # Rendering plots
   output$apartments_plot1 <- renderPlot({
     rv$apartments
     dataframe_apartments <- COMMONUTILS_load_dataframe("data/apartments.csv")
@@ -286,6 +314,34 @@ render_data <- function(output, input, rv) {
     abline(dependency) 
   })
   
+  output$data_stats_plot1 <- renderPlot({
+    rv$model_res
+    dataframe_complexes <- COMMONUTILS_load_dataframe("data/complexes.csv")
+    dataframe_apartments <- COMMONUTILS_load_dataframe("data/apartments.csv")
+    if(nrow(dataframe_apartments)>0 & nrow(dataframe_complexes)>0) {
+      dataframe_apartments <- merge(dataframe_complexes, dataframe_apartments, by.x = "complex_id", by.y = "complex_id")
+    }
+    plot(dataframe_apartments$complex_location_dist_to_center, dataframe_apartments$apartment_price_meter, main = "Distance to center vs. Price")
+  })
+  
+  output$data_stats_plot2 <- renderPlot({
+    rv$model_res
+    dataframe_complexes <- COMMONUTILS_load_dataframe("data/complexes.csv")
+    dataframe_apartments <- COMMONUTILS_load_dataframe("data/apartments.csv")
+    if(nrow(dataframe_apartments)>0 & nrow(dataframe_complexes)>0) {
+      dataframe_apartments <- merge(dataframe_complexes, dataframe_apartments, by.x = "complex_id", by.y = "complex_id")
+    }
+    max_dist <- max(dataframe_apartments$complex_location_dist_to_center, na.rm = TRUE)
+    h <-hist(dataframe_apartments$complex_location_dist_to_center, breaks=20, xaxt='n', main = "Distance to center histogram")
+    axis(side=1, at=seq(0, max_dist, 1000), labels=seq(0,max_dist,1000))
+    xfit<-seq(min(dataframe_apartments$complex_location_dist_to_center),max(dataframe_apartments$complex_location_dist_to_center),length=40) 
+    yfit<-dnorm(xfit,mean=mean(dataframe_apartments$complex_location_dist_to_center),sd=sd(dataframe_apartments$complex_location_dist_to_center)) 
+    yfit <- yfit*diff(h$mids[1:2])*length(dataframe_apartments$complex_location_dist_to_center) 
+    lines(xfit, yfit, col="blue", lwd=1)
+    h
+  })
+  
+  # Rendering data tables
   output$complexes_table <- renderDataTable({
     rv$complexes
     dataframe_complexes <- COMMONUTILS_load_dataframe("data/complexes.csv")
@@ -337,6 +393,7 @@ render_data <- function(output, input, rv) {
     }
   })
     
+  # Rendering maps
   output$complexes_map <- renderGvis({
     rv$complexes
     dataframe_complexes <- COMMONUTILS_load_dataframe("data/complexes.csv")

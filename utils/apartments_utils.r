@@ -172,7 +172,17 @@ APUTILS_fetch_complexes_page <- function(log, progress, params, page, use_accura
     df_complexes_res <- transform(df_complexes_res, complex_dist_to_metro = ifelse(is.na(complex_dist_to_metro), NA, gsub(";.*","",complex_dist_to_metro)))
     df_complexes_res <- transform(df_complexes_res, complex_dist_to_metro = ifelse(is.na(complex_dist_to_metro), NA, as.numeric(complex_dist_to_metro)))
     
-    df_complexes_res <- subset(df_complexes_res, select = c("complex_id","complex_name","complex_creator","complex_state","complex_ready_date","low_price","high_price","complex_location","complex_metro","complex_location_coords","geocoding_accurate", "complex_closest_metro","complex_dist_to_metro","complex_apartment_count"))
+    # Calculate distance to center
+    df_complexes_res["complex_location_dist_to_center"] <- NA
+    df_complexes_res["complex_location_coords_lon"] <- NA
+    df_complexes_res["complex_location_coords_lat"] <- NA
+    df_complexes_res <- transform(df_complexes_res, complex_location_coords_lon = as.numeric(gsub("^.*:","",complex_location_coords)))
+    df_complexes_res <- transform(df_complexes_res, complex_location_coords_lat = as.numeric(gsub(":.*","",complex_location_coords)))
+    for (iii in 1:nrow(df_complexes_res)) {
+      df_complexes_res[iii,]$complex_location_dist_to_center = distHaversine(c(30.316215,59.948907),c(df_complexes_res[iii,]$complex_location_coords_lon,df_complexes_res[iii,]$complex_location_coords_lat))
+    }
+    
+    df_complexes_res <- subset(df_complexes_res, select = c("complex_id","complex_name","complex_creator","complex_state","complex_ready_date","low_price","high_price","complex_location","complex_location_dist_to_center", "complex_metro","complex_location_coords","complex_location_coords_lat","complex_location_coords_lon","geocoding_accurate", "complex_closest_metro","complex_dist_to_metro","complex_apartment_count"))
   }
   return(df_complexes_res)
 }

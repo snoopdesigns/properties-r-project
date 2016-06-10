@@ -19,7 +19,7 @@ model_select <- c(
   "apartment_type_n",
   "apartment_complex_state_n",
   "complex_dist_to_metro",
-  "apartment_dist_to_center",
+  "complex_location_dist_to_center",
   "apartment_is_first_floor",
   "apartment_is_last_floor",
   "apartment_ready_date_diff",
@@ -60,12 +60,6 @@ MODELUTILS_prepare_dataset <- function(df_apartments) {
   df_apartments["apartment_building_type_n"] <- NA
   df_apartments["apartment_type_n"] <- NA
   df_apartments["apartment_complex_state_n"] <- NA
-  
-  df_apartments["apartment_complex_lon"] <- NA
-  df_apartments["apartment_complex_lat"] <- NA
-  df_apartments["apartment_complex_lon_center"] <- 30.316215
-  df_apartments["apartment_complex_lat_center"] <- 59.948907
-  df_apartments["apartment_dist_to_center"] <- NA
   df_apartments["apartment_ready_date_n"] <- NA
   df_apartments["apartment_ready_date_diff"] <- NA
   df_apartments <- transform(df_apartments, apartment_building_type_n = as.numeric.factor(apartment_building_type))
@@ -87,12 +81,6 @@ MODELUTILS_prepare_dataset <- function(df_apartments) {
   df_apartments <- transform(df_apartments, apartment_ready_date_diff = apartment_ready_date_n - Sys.Date())
   df_apartments <- transform(df_apartments, apartment_ready_date_diff = ifelse(grepl("Сдан ГК", complex_state), 0, apartment_ready_date_diff))
   df_apartments <- transform(df_apartments, apartment_ready_date_diff = ifelse(apartment_ready_date_diff < 0, 0, apartment_ready_date_diff))
-  
-  df_apartments <- transform(df_apartments, apartment_complex_lon = as.numeric(gsub("^.*:","",complex_location_coords)))
-  df_apartments <- transform(df_apartments, apartment_complex_lat = as.numeric(gsub(":.*","",complex_location_coords)))
-  for (iii in 1:nrow(df_apartments)) {
-    df_apartments[iii,]$apartment_dist_to_center = distHaversine(c(df_apartments[iii,]$apartment_complex_lon_center,df_apartments[iii,]$apartment_complex_lat_center),c(df_apartments[iii,]$apartment_complex_lon,df_apartments[iii,]$apartment_complex_lat))
-  }
   
   df_apartments["apartment_is_last_floor"] <- NA
   df_apartments["apartment_is_first_floor"] <- NA
