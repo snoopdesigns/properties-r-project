@@ -2,6 +2,7 @@ library(shiny)
 library(shinydashboard)
 library(googleVis)
 library(DT)
+library(leaflet)
 
 # TODO LIST
 # Filter 'Сдан' in apartment_building_type
@@ -136,7 +137,7 @@ ui <- dashboardPage(
         fluidRow(
           box(
             title = "Complexes information",solidHeader = TRUE,collapsible = TRUE,status="info",
-            htmlOutput("complexes_map"),
+            leafletOutput("complexes_map"),
             HTML("<hr>"),
             dataTableOutput("complexes_table"),
             width = 12
@@ -175,19 +176,23 @@ ui <- dashboardPage(
           box(
             title = "Data modelling",solidHeader = TRUE,collapsible = TRUE,status="info",
             column(
+              sliderInput("model_threshold", "Minimum threshold:", 1, 30, 10, 1),
+              sliderInput("model_max_distance", "Maximum distance:", 1000, 100000, 30000, 1000),
+              sliderInput("model_price_filter", "Price filter:", min = 1000000, max = 10000000, value = c(1500000, 3500000), step = 100000),
+              width = 4
+            ),
+            column(
               htmlOutput("model_stats"),
               HTML("<hr>"),
-              sliderInput("model_price_filter", "Price filter:", min = 1000000, max = 10000000, value = c(1500000, 3500000), step = 100000),
-              sliderInput("model_threshold", "Minimum threshold:", 1, 30, 10, 1),
               actionButton("modelling", "Build model"),
+              width = 2
+            ),
+            column(
+              leafletOutput("model_res_map"),
               width = 6
             ),
             column(
               plotOutput("model_res_plot1"),
-              width = 6
-            ),
-            column(
-              htmlOutput("model_res_map"),
               width = 6
             ),
             column(
@@ -218,12 +223,8 @@ ui <- dashboardPage(
               width = 6
             ),
             column(
-              plotOutput("data_stats_plot3"),
-              width = 6
-            ),
-            column(
-              plotOutput("data_stats_plot4"),
-              width = 6
+              sliderInput("data_stats_max_distance", "Maximum distance:", 1000, 100000, 30000, 1000),
+              width = 12
             ),
             width = 12
           )
@@ -307,7 +308,7 @@ render_data <- function(output, input, rv) {
   output$model_res_plot2 <- renderPlot({
     rv$model_res
     dataframe_model_res <- COMMONUTILS_load_dataframe("data/model_res.csv")
-    dataframe_model_res <- dataframe_model_res[dataframe_model_res$apartment_price >= input$model_price_filter[1] & dataframe_model_res$apartment_price <= input$model_price_filter[2],]
+    dataframe_model_res <- dataframe_model_res[dataframe_model_res$complex_location_dist_to_center <= input$model_max_distance & dataframe_model_res$apartment_price >= input$model_price_filter[1] & dataframe_model_res$apartment_price <= input$model_price_filter[2],]
     plot(dataframe_model_res$apartment_price_pred, dataframe_model_res$apartment_price)
     par(new=TRUE, col="red")
     dependency <- lm(dataframe_model_res$apartment_price_pred ~ dataframe_model_res$apartment_price)
@@ -315,21 +316,23 @@ render_data <- function(output, input, rv) {
   })
   
   output$data_stats_plot1 <- renderPlot({
-    rv$model_res
+    rv$apartments
     dataframe_complexes <- COMMONUTILS_load_dataframe("data/complexes.csv")
     dataframe_apartments <- COMMONUTILS_load_dataframe("data/apartments.csv")
     if(nrow(dataframe_apartments)>0 & nrow(dataframe_complexes)>0) {
       dataframe_apartments <- merge(dataframe_complexes, dataframe_apartments, by.x = "complex_id", by.y = "complex_id")
+      dataframe_apartments <- dataframe_apartments[dataframe_apartments$complex_location_dist_to_center <= input$data_stats_max_distance,]
     }
-    plot(dataframe_apartments$complex_location_dist_to_center, dataframe_apartments$apartment_price_meter, main = "Distance to center vs. Price")
+    plot(main = "Apartment Price vs. Distance to center",aggregate(apartment_price_meter ~ complex_location_dist_to_center, dataframe_apartments, function(x) median(x)))
   })
   
   output$data_stats_plot2 <- renderPlot({
-    rv$model_res
+    rv$apartments
     dataframe_complexes <- COMMONUTILS_load_dataframe("data/complexes.csv")
     dataframe_apartments <- COMMONUTILS_load_dataframe("data/apartments.csv")
     if(nrow(dataframe_apartments)>0 & nrow(dataframe_complexes)>0) {
       dataframe_apartments <- merge(dataframe_complexes, dataframe_apartments, by.x = "complex_id", by.y = "complex_id")
+      dataframe_apartments <- dataframe_apartments[dataframe_apartments$complex_location_dist_to_center <= input$data_stats_max_distance,]
     }
     max_dist <- max(dataframe_apartments$complex_location_dist_to_center, na.rm = TRUE)
     h <-hist(dataframe_apartments$complex_location_dist_to_center, breaks=20, xaxt='n', main = "Distance to center histogram")
@@ -383,7 +386,7 @@ render_data <- function(output, input, rv) {
     dataframe_model_res <- transform(dataframe_model_res, apartment_link = sprintf('<a href="%s" target="_blank">*</a>', apartment_link))
     if (ncol(dataframe_model_res) > 0) {
       datatable(
-        subset(dataframe_model_res[dataframe_model_res$percents >= input$model_threshold & dataframe_model_res$apartment_price >= input$model_price_filter[1] & dataframe_model_res$apartment_price <= input$model_price_filter[2],], select = model_res_select),
+        subset(dataframe_model_res[dataframe_model_res$complex_location_dist_to_center <= input$model_max_distance & dataframe_model_res$percents >= input$model_threshold & dataframe_model_res$apartment_price >= input$model_price_filter[1] & dataframe_model_res$apartment_price <= input$model_price_filter[2],], select = model_res_select),
         colnames = model_res_select_columns,  
         escape = FALSE,
         options = list(pageLength = 100)
@@ -394,37 +397,46 @@ render_data <- function(output, input, rv) {
   })
     
   # Rendering maps
-  output$complexes_map <- renderGvis({
+  output$complexes_map <- renderLeaflet({
     rv$complexes
     dataframe_complexes <- COMMONUTILS_load_dataframe("data/complexes.csv")
-    if (ncol(dataframe_complexes) > 0) {
+    if (ncol(dataframe_complexes) > 0 & nrow(dataframe_complexes)) {
       dataframe_complexes["map_tip"] <- ""
       dataframe_complexes <- transform(dataframe_complexes, map_tip = paste(complex_name,complex_location,paste("Кол-во квартир:", complex_apartment_count,sep=" "),sep = "<br>"))
-      gvisMap(dataframe_complexes, "complex_location_coords", "map_tip", options=list(
-        mapType='normal', 
-        enableScrollWheel=TRUE, 
-        showTip=TRUE))
+      m = leaflet(dataframe_complexes) %>% addTiles()
+      m %>% addCircleMarkers(
+        #clusterOptions = markerClusterOptions(), 
+        lat = ~complex_location_coords_lat, 
+        lng = ~complex_location_coords_lon, 
+        popup = ~map_tip,
+        radius = 6,
+        color = "navy",
+        stroke = FALSE, 
+        fillOpacity = 0.5
+      )
     }
   })
   
-  output$model_res_map <- renderGvis({
+  output$model_res_map <- renderLeaflet({
     rv$model_res
     dataframe_model_res <- COMMONUTILS_load_dataframe("data/model_res.csv")
-    dataframe_model_res <- dataframe_model_res[dataframe_model_res$percents >= input$model_threshold & dataframe_model_res$apartment_price >= input$model_price_filter[1] & dataframe_model_res$apartment_price <= input$model_price_filter[2],]
-    dataframe_model_res <- transform(dataframe_model_res, complex_location_coords = MODELUTILS_randomize_ap_coords(complex_location_coords))
+    dataframe_model_res <- dataframe_model_res[dataframe_model_res$complex_location_dist_to_center <= input$model_max_distance & dataframe_model_res$percents >= input$model_threshold & dataframe_model_res$apartment_price >= input$model_price_filter[1] & dataframe_model_res$apartment_price <= input$model_price_filter[2],]
     if (ncol(dataframe_model_res) > 0 && nrow(dataframe_model_res)) {
       dataframe_model_res["map_tip"] <- ""
       dataframe_model_res <- transform(dataframe_model_res, map_tip = sprintf("%s<br>Цена: %d<br>Выгода: %d (%.1f прц)", complex_name, apartment_price, apartment_benefit_price, percents))
-      gvisMap(dataframe_model_res, "complex_location_coords", "map_tip", options=list(
-        mapType='normal', 
-        enableScrollWheel=TRUE, 
-        showTip=TRUE))
+      m = leaflet(dataframe_model_res) %>% addTiles()
+      m %>% addCircleMarkers(
+        clusterOptions = markerClusterOptions(),
+        lat = ~complex_location_coords_lat, 
+        lng = ~complex_location_coords_lon, 
+        popup = ~map_tip,
+        radius = 9,
+        color = "red",
+        stroke = FALSE, 
+        fillOpacity = 0.9
+      )
     } else {
-      empty_df <- data.frame(locationvar = character(0), tipvar = character(0))
-      gvisMap(empty_df, "locationvar", "tipvar", options=list(
-        mapType='normal', 
-        enableScrollWheel=FALSE, 
-        showTip=FALSE))
+      m = leaflet() %>% addTiles()
     }
   })
 }

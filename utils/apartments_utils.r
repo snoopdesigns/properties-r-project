@@ -149,7 +149,14 @@ APUTILS_fetch_complexes_page <- function(log, progress, params, page, use_accura
       log(sprintf("Geocoding complexes location..."))
       progress$set(detail = "Geocoding complexes location...")
       for(i in 1:nrow(df_complexes_res)) {
-        coords <- geocode(df_complexes_res[i,]$complex_location, force = FALSE, source = "google",output="latlon")
+        coords <- c(lat=NA,lon=NA)
+        tryCatch({
+          coords <- geocode(df_complexes_res[i,]$complex_location, force = FALSE, source = "google",output="latlon")
+        },
+        error = function(e) {
+          print("Unable to get geocode!")
+        }
+        )
         df_complexes_res[i,] <- transform(df_complexes_res[i,], complex_location_coords = ifelse(is.na(coords$lat), NA, paste(coords$lat,coords$lon,sep = ":")))
         if(is.na(df_complexes_res[i,]$complex_location_coords)) {
           log(sprintf("Re-running geocode for complex: %s (%s) with Yandex", df_complexes_res[i,]$complex_name, df_complexes_res[i,]$complex_id))
