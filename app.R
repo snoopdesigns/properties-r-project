@@ -5,7 +5,7 @@ library(DT)
 library(leaflet)
 
 # TODO LIST
-# Filter 'Сдан' in apartment_building_type
+# Add median curve to distance to center/price plot
 
 source("utils/encoding.r")
 
@@ -404,15 +404,14 @@ render_data <- function(output, input, rv) {
       dataframe_complexes["map_tip"] <- ""
       dataframe_complexes <- transform(dataframe_complexes, map_tip = paste(complex_name,complex_location,paste("Кол-во квартир:", complex_apartment_count,sep=" "),sep = "<br>"))
       m = leaflet(dataframe_complexes) %>% addTiles()
-      m %>% addCircleMarkers(
-        #clusterOptions = markerClusterOptions(), 
+      m %>% addMarkers(
         lat = ~complex_location_coords_lat, 
         lng = ~complex_location_coords_lon, 
-        popup = ~map_tip,
-        radius = 6,
-        color = "navy",
-        stroke = FALSE, 
-        fillOpacity = 0.5
+        popup = ~map_tip
+        #radius = 6,
+        #color = "navy",
+        #stroke = FALSE, 
+        #fillOpacity = 0.5
       )
     }
   })
