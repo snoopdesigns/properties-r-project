@@ -88,8 +88,8 @@ ui <- dashboardPage(
       menuItem("Download Data", tabName = "download_data", icon = icon("sliders")),
       menuItem("Complexes", tabName = "complexes_data", icon = icon("building")),
       menuItem("Apartments", tabName = "apartments_data", icon = icon("database")),
-      menuItem("Modelling", tabName = "model_data", icon = icon("database")),
-      menuItem("Data Statistics", tabName = "data_stats", icon = icon("database"))
+      menuItem("Modelling", tabName = "model_data", icon = icon("calculator")),
+      menuItem("Data Statistics", tabName = "data_stats", icon = icon("line-chart"))
     )
   ),
   dashboardBody(
@@ -224,6 +224,7 @@ ui <- dashboardPage(
             ),
             column(
               sliderInput("data_stats_max_distance", "Maximum distance:", 1000, 100000, 30000, 1000),
+              sliderInput("data_stats_max_distance_smooth", "Smoothing value:", 0.1, 1, 0.4, 0.1),
               width = 12
             ),
             width = 12
@@ -323,7 +324,10 @@ render_data <- function(output, input, rv) {
       dataframe_apartments <- merge(dataframe_complexes, dataframe_apartments, by.x = "complex_id", by.y = "complex_id")
       dataframe_apartments <- dataframe_apartments[dataframe_apartments$complex_location_dist_to_center <= input$data_stats_max_distance,]
     }
-    plot(main = "Apartment Price vs. Distance to center",aggregate(apartment_price_meter ~ complex_location_dist_to_center, dataframe_apartments, function(x) median(x)))
+    df_aggregated <- aggregate(apartment_price_meter ~ complex_location_dist_to_center, dataframe_apartments, function(x) median(x))
+    plot(main = "Apartment Price vs. Distance to center", df_aggregated)
+    df_median <- data.frame(complex_location_dist_to_center=df_aggregated$complex_location_dist_to_center, apartment_price_meter=predict(loess(apartment_price_meter ~ complex_location_dist_to_center, df_aggregated, span=input$data_stats_max_distance_smooth)))
+    lines(df_median$complex_location_dist_to_center, df_median$apartment_price_meter, col="darkgreen", lwd=3)
   })
   
   output$data_stats_plot2 <- renderPlot({
@@ -340,7 +344,7 @@ render_data <- function(output, input, rv) {
     xfit<-seq(min(dataframe_apartments$complex_location_dist_to_center),max(dataframe_apartments$complex_location_dist_to_center),length=40) 
     yfit<-dnorm(xfit,mean=mean(dataframe_apartments$complex_location_dist_to_center),sd=sd(dataframe_apartments$complex_location_dist_to_center)) 
     yfit <- yfit*diff(h$mids[1:2])*length(dataframe_apartments$complex_location_dist_to_center) 
-    lines(xfit, yfit, col="blue", lwd=1)
+    lines(xfit, yfit, col="blue", lwd=3)
     h
   })
   
