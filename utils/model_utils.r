@@ -25,6 +25,14 @@ model_select <- c(
   "apartment_ready_date_diff",
   "apartment_price")
 
+cluster_select <- c(
+  "apartment_total_area", 
+  "apartment_living_area", 
+  "apartment_kitchen_area", 
+  "complex_dist_to_metro",
+  "complex_location_dist_to_center",
+  "apartment_ready_date_diff")
+
 as.numeric.factor <- function(x) {seq_along(levels(x))[x]}
 
 MODELUTILS_percent <- function(x, digits = 2, format = "f", ...) {
@@ -87,9 +95,15 @@ MODELUTILS_prepare_dataset <- function(df_apartments) {
   df_apartments <- transform(df_apartments, apartment_is_first_floor = ifelse(apartment_floor_number == 1, TRUE, FALSE))
   df_apartments <- transform(df_apartments, apartment_is_last_floor = ifelse(apartment_floor_number == apartment_floor_total, TRUE, FALSE))
   
-  model_data <- subset(df_apartments, select = model_select)
-  
   return(df_apartments)
+}
+
+MODELUTILS_run_knn <- function(df_model_data, df_query, k_val) {
+  df_model_data <- df_model_data[df_model_data$complex_name != df_query[1,]$complex_name,]
+  df_mod <- subset(df_model_data, select = cluster_select)
+  df_q <- subset(df_query, select = cluster_select)
+  df_res <- get.knnx(df_mod, df_q, k=k_val)
+  return(df_model_data[df_res$nn.index,])
 }
 
 MODELUTILS_run_model <- function(log, progress, df_apartments) {

@@ -3,9 +3,10 @@ library(shinydashboard)
 library(googleVis)
 library(DT)
 library(leaflet)
+library(FNN)
 
 # TODO LIST
-# Add median curve to distance to center/price plot
+
 
 source("utils/encoding.r")
 
@@ -56,8 +57,8 @@ apartments_select = c(
   "apartment_link",
   "apartment_price_meter",
   "apartment_price"
-  
 )
+
 apartments_select_columns = c(
   "Компл",
   "Тип",
@@ -76,8 +77,52 @@ apartments_select_columns = c(
   "Цена"
 )
 
-model_res_select = append(apartments_select, c("apartment_price_pred","percents","apartment_benefit_price"))
-model_res_select_columns = append(apartments_select_columns, c("Ц п","Прц","Выг"))
+apartments_cluster_select = c(
+  "complex_name",
+  "apartment_building_type",
+  "apartment_ready_date",
+  "apartment_type",
+  "apartment_total_area",
+  "apartment_living_area",
+  "apartment_kitchen_area",
+  "apartment_floor_number",
+  "apartment_floor_total",
+  "apartment_is_first_floor",
+  "apartment_is_last_floor",
+  "apartment_has_balkony",
+  "apartment_has_loggia",
+  "complex_state",
+  "complex_location_dist_to_center",
+  "complex_dist_to_metro",
+  "apartment_link",
+  "apartment_price_meter",
+  "apartment_price"
+)
+
+apartments_cluster_select_columns = c(
+  "Комп",
+  "Дом",
+  "Гот",
+  "Комн",
+  "Общ",
+  "Жил",
+  "Кух",
+  "Этаж",
+  "Этаж вс",
+  "Перв эт",
+  "Посл эт",
+  "Балк",
+  "Лодж",
+  "Стр",
+  "Центр",
+  "Метро",
+  "W",
+  "Цена кв",
+  "Цена"
+)
+
+model_res_select = append(apartments_select, c("apartment_price_pred","percents"))
+model_res_select_columns = append(apartments_select_columns, c("Ц п","Выг"))
 
 ui <- dashboardPage(
   dashboardHeader(
@@ -198,6 +243,15 @@ ui <- dashboardPage(
             column(
               plotOutput("model_res_plot2"),
               width = 6
+            ),
+            width = 12
+          ),
+          box(
+            title = "Similar apartments",solidHeader = TRUE,collapsible = TRUE,status="info",
+            column(
+              sliderInput("model_cluster_k", "K value:", 1, 100, 5, 1),
+              dataTableOutput("model_res_table1"),
+              width = 12
             ),
             width = 12
           ),
@@ -393,7 +447,26 @@ render_data <- function(output, input, rv) {
         subset(dataframe_model_res[dataframe_model_res$complex_location_dist_to_center <= input$model_max_distance & dataframe_model_res$percents >= input$model_threshold & dataframe_model_res$apartment_price >= input$model_price_filter[1] & dataframe_model_res$apartment_price <= input$model_price_filter[2],], select = model_res_select),
         colnames = model_res_select_columns,  
         escape = FALSE,
-        options = list(pageLength = 100)
+        options = list(pageLength = 100),
+        selection = 'single'
+      )
+    } else {
+      datatable(data.frame(matrix(ncol = 0, nrow = 0)))
+    }
+  })
+  
+  output$model_res_table1 <- renderDataTable({
+    rv$model_res
+    dataframe_model_res <- COMMONUTILS_load_dataframe("data/model_res.csv")
+    dataframe_model_res <- transform(dataframe_model_res, apartment_link = sprintf('<a href="%s" target="_blank">*</a>', apartment_link))
+    if(!is.null(input$model_res_table_rows_selected)) {
+      dataframe_query <- dataframe_model_res[as.numeric(input$model_res_table_rows_selected),]
+      dataframe_nn_select <- MODELUTILS_run_knn(dataframe_model_res,dataframe_query,input$model_cluster_k)
+      datatable(
+        subset(dataframe_nn_select, select = apartments_cluster_select),
+        colnames = apartments_cluster_select_columns,  
+        escape = FALSE,
+        options = list(pageLength = 5)
       )
     } else {
       datatable(data.frame(matrix(ncol = 0, nrow = 0)))
@@ -426,7 +499,7 @@ render_data <- function(output, input, rv) {
     dataframe_model_res <- dataframe_model_res[dataframe_model_res$complex_location_dist_to_center <= input$model_max_distance & dataframe_model_res$percents >= input$model_threshold & dataframe_model_res$apartment_price >= input$model_price_filter[1] & dataframe_model_res$apartment_price <= input$model_price_filter[2],]
     if (ncol(dataframe_model_res) > 0 && nrow(dataframe_model_res)) {
       dataframe_model_res["map_tip"] <- ""
-      dataframe_model_res <- transform(dataframe_model_res, map_tip = sprintf("%s<br>Цена: %d<br>Выгода: %d (%.1f прц)", complex_name, apartment_price, apartment_benefit_price, percents))
+      dataframe_model_res <- transform(dataframe_model_res, map_tip = sprintf("%s<br>Цена: %d<br>Выгода: %s", complex_name, apartment_price, percents))
       m = leaflet(dataframe_model_res) %>% addTiles()
       m %>% addCircleMarkers(
         clusterOptions = markerClusterOptions(),
