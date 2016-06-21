@@ -20,6 +20,8 @@ model_select <- c(
   "apartment_complex_state_n",
   "complex_dist_to_metro",
   "complex_location_dist_to_center",
+  "apartment_closest_metro_dist_time",
+  "apartment_closest_metro_dist_type",
   "apartment_is_first_floor",
   "apartment_is_last_floor",
   "apartment_ready_date_diff",
@@ -60,6 +62,7 @@ MODELUTILS_prepare_dataset <- function(df_apartments) {
   df_apartments <- df_apartments[!is.na(df_apartments$apartment_kitchen_area),]
   df_apartments <- df_apartments[!is.na(df_apartments$apartment_floor_number),]
   df_apartments <- df_apartments[!is.na(df_apartments$apartment_building_type),]
+  df_apartments <- df_apartments[!is.na(df_apartments$apartment_closest_metro_dist_type),]
   
   if(nrow(df_apartments) == 0) {
     return(data.frame(matrix(ncol = 0, nrow = 0)))
@@ -70,9 +73,9 @@ MODELUTILS_prepare_dataset <- function(df_apartments) {
   df_apartments["apartment_complex_state_n"] <- NA
   df_apartments["apartment_ready_date_n"] <- NA
   df_apartments["apartment_ready_date_diff"] <- NA
-  df_apartments <- transform(df_apartments, apartment_building_type_n = as.numeric.factor(apartment_building_type))
-  df_apartments <- transform(df_apartments, apartment_type_n = as.numeric.factor(apartment_type))
-  df_apartments <- transform(df_apartments, apartment_complex_state_n = as.numeric.factor(complex_state))
+  df_apartments <- transform(df_apartments, apartment_building_type_n = as.factor(apartment_building_type))
+  df_apartments <- transform(df_apartments, apartment_type_n = as.factor(apartment_type))
+  df_apartments <- transform(df_apartments, apartment_complex_state_n = as.factor(complex_state))
   
   df_apartments <- transform(df_apartments, apartment_ready_date_n = ifelse(is.na(apartment_ready_date), as.character(complex_ready_date), as.character(apartment_ready_date)))
   df_apartments <- transform(df_apartments, apartment_ready_date_n = ifelse(!is.na(apartment_ready_date) & grepl("года", apartment_ready_date_n), gsub(" года","",apartment_ready_date_n), apartment_ready_date_n))
@@ -94,6 +97,17 @@ MODELUTILS_prepare_dataset <- function(df_apartments) {
   df_apartments["apartment_is_first_floor"] <- NA
   df_apartments <- transform(df_apartments, apartment_is_first_floor = ifelse(apartment_floor_number == 1, TRUE, FALSE))
   df_apartments <- transform(df_apartments, apartment_is_last_floor = ifelse(apartment_floor_number == apartment_floor_total, TRUE, FALSE))
+  
+  df_apartments["complex_metro_dist"] <- NA
+  df_apartments["complex_metro_dist_type"] <- NA
+  df_apartments <- transform(df_apartments, complex_metro_dist = gsub("^.*,","",complex_metro))
+  df_apartments <- transform(df_apartments, complex_metro_dist_type = gsub("^.* мин. ","",complex_metro_dist))
+  df_apartments <- transform(df_apartments, complex_metro_dist_type = as.factor(complex_metro_dist_type))
+  df_apartments <- transform(df_apartments, complex_metro_dist = gsub(" мин.*","",complex_metro_dist))
+  df_apartments <- transform(df_apartments, complex_metro_dist = as.numeric(complex_metro_dist))
+  
+  df_apartments <- transform(df_apartments, apartment_closest_metro_dist_time = as.numeric(apartment_closest_metro_dist_time))
+  df_apartments <- transform(df_apartments, apartment_closest_metro_dist_type = as.factor(apartment_closest_metro_dist_type))
   
   return(df_apartments)
 }

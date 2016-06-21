@@ -54,6 +54,10 @@ apartments_select = c(
   "apartment_floor_total",
   "apartment_has_balkony",
   "apartment_has_loggia",
+  "complex_location_dist_to_center",
+  "complex_dist_to_metro",
+  "apartment_closest_metro_dist_time",
+  "apartment_closest_metro_dist_type",
   "apartment_link",
   "apartment_price_meter",
   "apartment_price"
@@ -68,13 +72,17 @@ apartments_select_columns = c(
   "Общ",
   "Жил",
   "Кух",
-  "Этаж",
-  "Этаж вс",
-  "Балк",
-  "Лодж",
+  "Эт",
+  "Эт в",
+  "Б",
+  "Л",
+  "Ц",
+  "Метр",
+  "Метр вр",
+  "Метр т",
   "W",
-  "Цена кв",
-  "Цена"
+  "Ц кв",
+  "Ц"
 )
 
 apartments_cluster_select = c(
@@ -94,6 +102,8 @@ apartments_cluster_select = c(
   "complex_state",
   "complex_location_dist_to_center",
   "complex_dist_to_metro",
+  "apartment_closest_metro_dist_time",
+  "apartment_closest_metro_dist_type",
   "apartment_link",
   "apartment_price_meter",
   "apartment_price"
@@ -107,18 +117,20 @@ apartments_cluster_select_columns = c(
   "Общ",
   "Жил",
   "Кух",
-  "Этаж",
-  "Этаж вс",
+  "Э",
+  "Э вс",
   "Перв эт",
   "Посл эт",
-  "Балк",
-  "Лодж",
+  "Б",
+  "Л",
   "Стр",
-  "Центр",
-  "Метро",
+  "Ц",
+  "М",
+  "М вр",
+  "М т",
   "W",
-  "Цена кв",
-  "Цена"
+  "Ц кв",
+  "Ц"
 )
 
 model_res_select = append(apartments_select, c("apartment_price_pred","percents"))
@@ -250,6 +262,13 @@ ui <- dashboardPage(
             title = "Similar apartments",solidHeader = TRUE,collapsible = TRUE,status="info",
             column(
               sliderInput("model_cluster_k", "K value:", 1, 100, 5, 1),
+              width = 6
+            ),
+            column(
+              htmlOutput("model_cluster_selected"),
+              width = 6
+            ),
+            column(
               dataTableOutput("model_res_table1"),
               width = 12
             ),
@@ -329,6 +348,12 @@ render_data <- function(output, input, rv) {
     res <- "<b>Data statistics:</b>"
     res <- paste(res, paste("Complexes amount", as.character(nrow(dataframe_complexes)), sep = ": "), sep = "<br>")
     res <- paste(res, paste("Apartments amount", as.character(nrow(dataframe_apartments)), sep = ": "), sep = "<br>")
+  })
+  
+  output$model_cluster_selected <- renderText({
+    rv$model_res
+    res <- sprintf("Selected: %s",str(input$model_res_table_rows_selected))
+    res
   })
   
   # Rendering plots
